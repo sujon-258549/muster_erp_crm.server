@@ -1,0 +1,1 @@
+{"version":3,"file":"application.interface.d.ts","sourceRoot":"","sources":["../../../../src/app/modules/application/application.interface.ts"],"names":[],"mappings":"AAAA,MAAM,MAAM,yBAAyB,GAAG;IACtC,UAAU,CAAC,EAAE,MAAM,GAAG,SAAS,CAAC;IAChC,KAAK,CAAC,EAAE,MAAM,GAAG,SAAS,CAAC;IAC3B,MAAM,CAAC,EAAE,MAAM,GAAG,SAAS,CAAC;IAC5B,WAAW,CAAC,EAAE,MAAM,GAAG,SAAS,CAAC;CAClC,CAAC"}

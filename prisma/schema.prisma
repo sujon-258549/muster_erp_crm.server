@@ -1,0 +1,543 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// AUTH / ROLE
+// ============================================================================
+
+model AllRole {
+  id              String           @id @default(uuid())
+  role            String?
+  description     String?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("all_roles")
+}
+
+model RolePermission {
+  id          String   @id @default(uuid())
+  roleId      String?
+  module      String?
+  permissions String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  role        AllRole? @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@map("role_permissions")
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  branchId    String?
+  name        String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  branch      Branch?  @relation(fields: [branchId], references: [id])
+  users       User[]
+
+  @@map("departments")
+}
+
+// ============================================================================
+// ORGANIZATION (Branches & SubBranches)
+// ============================================================================
+
+model Branch {
+  id             String         @id @default(uuid())
+  ownerId        String?
+  name           String?
+  slug           String?        @unique
+  description    String?
+  logo           String?
+  email          String?
+  phone          String?
+  website        String?
+  address        String?
+  division       String?
+  district       String?
+  upazila        String?
+  industry       String?
+  businessType   String?
+  registrationNo String?
+  taxId          String?
+  currency       String?        @default("BDT")
+  timezone       String?        @default("Asia/Dhaka")
+  isActive       Boolean        @default(true)
+  isDeleted      Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  owner          User?          @relation("OwnedBranches", fields: [ownerId], references: [id])
+  subBranches    SubBranch[]
+  employees      User[]         @relation("BranchEmployees")
+  departments    Department[]
+  categories     Category[]
+  workTypes      WorkType[]
+  blogs          Blog[]
+  folders        Folder[]
+  comments       Comment[]
+  notifications  Notification[]
+
+  @@map("branches")
+}
+
+model SubBranch {
+  id          String   @id @default(uuid())
+  branchId    String?
+  managerId   String?
+  name        String?
+  slug        String?  @unique
+  description String?
+  email       String?
+  phone       String?
+  address     String?
+  division    String?
+  district    String?
+  upazila     String?
+  isActive    Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  branch      Branch?  @relation(fields: [branchId], references: [id])
+  manager     User?    @relation("ManagedSubBranches", fields: [managerId], references: [id])
+  employees   User[]   @relation("SubBranchEmployees")
+
+  @@map("sub_branches")
+}
+
+model Designation {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String?  @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isActive    Boolean  @default(true)
+  
+  users       User[]
+}
+
+// ============================================================================
+// USER (with auth tokens & device tracking)
+// ============================================================================
+
+model User {
+  id            String       @id @default(uuid())
+  email         String?      @unique
+  password      String?
+  mobile        String?      @unique
+  roleId        String?
+  role          AllRole?     @relation(fields: [roleId], references: [id])
+  designationId String?
+
+  // ---- Auth & device tracking ----
+  refreshToken      String?
+  currentDeviceId   String?
+  currentDeviceName String?
+  currentDeviceType String?
+  currentIpAddress  String?
+  currentUserAgent  String?
+
+  // ---- Status flags ----
+  isActive           Boolean   @default(true)
+  isBlocked          Boolean   @default(false)
+  isDeleted          Boolean   @default(false)
+  isVerified         Boolean   @default(false)
+  passwordChanged    Boolean   @default(false)
+  passwordChangeTime DateTime?
+
+  // ---- Login meta ----
+  lastLogin     DateTime? @default(now())
+  loginCount    Int       @default(0)
+  loginTryCount Int       @default(0)
+  loginTryTime  DateTime? @default(now())
+
+  // ---- FKs ----
+  subscriptionId String?
+  departmentId   String?
+  branchId       String?
+  subBranchId    String?
+
+  // ---- Timestamps ----
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ---- Relations ----
+  address            Address?
+  profile            Profile?
+  workInfo           WorkInfo?
+  subscription       Subscription?      @relation(fields: [subscriptionId], references: [id])
+  department         Department?        @relation(fields: [departmentId], references: [id])
+  branch             Branch?            @relation("BranchEmployees", fields: [branchId], references: [id])
+  subBranch          SubBranch?         @relation("SubBranchEmployees", fields: [subBranchId], references: [id])
+  ownedBranches      Branch[]           @relation("OwnedBranches")
+  managedSubBranches SubBranch[]        @relation("ManagedSubBranches")
+  subscriptionEarns  SubscriptionEarn[]
+  comments           Comment[]
+  notifications      Notification[]
+  payments           Payment[]
+  loginHistories     LoginHistory[]
+  designation   Designation? @relation(fields: [designationId], references: [id])
+
+  @@map("users")
+}
+
+// ============================================================================
+// LOGIN HISTORY (full audit trail per device / event)
+// ============================================================================
+
+model LoginHistory {
+  id     String       @id @default(uuid())
+  userId String?
+  status LoginStatus? @default(SUCCESS)
+
+  // ---- Device info ----
+  deviceId       String?
+  deviceName     String?
+  deviceType     String?
+  os             String?
+  osVersion      String?
+  browser        String?
+  browserVersion String?
+  userAgent      String?
+
+  // ---- Network info ----
+  ipAddress String?
+  location  String?
+  country   String?
+  city      String?
+
+  // ---- Event info ----
+  failureReason String?
+  loggedInAt    DateTime? @default(now())
+  loggedOutAt   DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("login_histories")
+}
+
+// ============================================================================
+// PROFILE / ADDRESS / WORK INFO
+// ============================================================================
+
+model Profile {
+  id            String      @id @default(uuid())
+  mobile        String?     @unique
+  name          String?
+  gender        Gender?
+  age           Int?
+  dob           DateTime?
+  bloodGroup    BloodGroup?
+  photoId       String?
+  profilePhoto  Image?      @relation("ProfilePhoto", fields: [photoId], references: [id])
+  photo         String?
+  nid           String?
+  nidPhoto      String[]    @default([])
+  nidPhotos     Image[]     @relation("NidPhotos")
+  emailVerified Boolean     @default(false)
+  phoneVerified Boolean     @default(false)
+  nidVerified   Boolean     @default(false)
+  serialId      String?
+  user          User?       @relation(fields: [mobile], references: [mobile])
+
+  @@map("profiles")
+}
+
+model Address {
+  id       String  @id @default(uuid())
+  mobile   String? @unique
+  division String?
+  district String?
+  upazila  String?
+  address  String?
+  user     User?   @relation(fields: [mobile], references: [mobile])
+
+  @@map("addresses")
+}
+
+model WorkInfo {
+  id                 String        @id @default(uuid())
+  mobile             String?       @unique
+  subCategories      SubCategory[]
+  experience         String?
+  workType           String?
+  workTypes          WorkType[]
+  workStartTime      String?
+  workTimeLimit      String?
+  availableTime      String?
+  isDeleted          Boolean       @default(false)
+  isBlocked          Boolean       @default(false)
+  passwordChangeTime DateTime?
+  passwordChanged    Boolean       @default(false)
+  verified           Boolean       @default(false)
+  user               User?         @relation(fields: [mobile], references: [mobile])
+
+  @@map("work_infos")
+}
+
+// ============================================================================
+// SUBSCRIPTION / PAYMENT
+// ============================================================================
+
+model SubscriptionEarn {
+  id             String        @id @default(uuid())
+  userId         String?
+  subscriptionId String?
+  amount         String?
+  expireAt       DateTime?
+  isActive       Boolean       @default(true)
+  isExpired      Boolean       @default(false)
+  renewAt        DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User?         @relation(fields: [userId], references: [id])
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@map("subscription_earns")
+}
+
+model Payment {
+  id                 String         @id @default(cuid())
+  transactionId      String?        @unique
+  amount             Float?
+  status             PaymentStatus? @default(PENDING)
+  paymentMethod      String?
+  userId             String?
+  subscriptionId     String?
+  user               User?          @relation(fields: [userId], references: [id])
+  subscription       Subscription?  @relation(fields: [subscriptionId], references: [id])
+  paymentGatewayData Json?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@map("payments")
+}
+
+model Subscription {
+  id                String             @id @default(uuid())
+  name              String?
+  price             String?
+  discount          String?
+  duration          String?
+  slug              String?            @unique
+  activeDays        Int?
+  isRecomended      Boolean            @default(false)
+  featured          String[]           @default([])
+  isActive          Boolean            @default(true)
+  status            Boolean            @default(true)
+  description       String?
+  isDeleted         Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  users             User[]
+  payments          Payment[]
+  subscriptionEarns SubscriptionEarn[]
+
+  @@map("subscriptions")
+}
+
+// ============================================================================
+// MISC
+// ============================================================================
+
+model Otp {
+  id        String   @id @default(uuid())
+  email     String?  @unique
+  otpToken  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("otps")
+}
+
+model Category {
+  id            String        @id @default(uuid())
+  branchId      String?
+  icon          String?
+  description   String?
+  name          String?
+  slug          String?       @unique
+  status        Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  branch        Branch?       @relation(fields: [branchId], references: [id])
+  subCategories SubCategory[]
+
+  @@map("categories")
+}
+
+model SubCategory {
+  id          String     @id @default(uuid())
+  name        String?
+  categoryId  String?
+  description String?
+  icon        String?
+  slug        String?    @unique
+  status      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  category    Category?  @relation(fields: [categoryId], references: [id])
+  workInfos   WorkInfo[]
+
+  @@map("sub_categories")
+}
+
+model WorkType {
+  id          String     @id @default(uuid())
+  branchId    String?
+  name        String?
+  description String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  branch      Branch?    @relation(fields: [branchId], references: [id])
+  workInfos   WorkInfo[]
+
+  @@map("work_types")
+}
+
+model Blog {
+  id          String    @id @default(uuid())
+  branchId    String?
+  title       String?
+  slug        String?   @unique
+  content     String?
+  description String?
+  excerpt     String?
+  coverImage  String?
+  tags        String[]  @default([])
+  category    String?
+  authorId    String?
+  authorName  String?
+  authorImage String?
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  branch      Branch?   @relation(fields: [branchId], references: [id])
+
+  @@map("blogs")
+}
+
+model Folder {
+  id        String   @id @default(uuid())
+  branchId  String?
+  name      String?
+  slug      String?  @unique
+  parentId  String?
+  status    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  parent    Folder?  @relation("FolderToFolder", fields: [parentId], references: [id])
+  children  Folder[] @relation("FolderToFolder")
+  images    Image[]
+
+  @@map("folders")
+}
+
+model Image {
+  id                   String    @id @default(uuid())
+  name                 String?
+  url                  String?
+  folderId             String?
+  slug                 String?   @unique
+  status               Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  folder               Folder?   @relation(fields: [folderId], references: [id])
+  profilePhotoProfiles Profile[] @relation("ProfilePhoto")
+  nidPhotoProfiles     Profile[] @relation("NidPhotos")
+
+  @@map("images")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  branchId  String?
+  userId    String?
+  comment   String?
+  isDeleted Boolean  @default(false)
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("comments")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  branchId  String?
+  userId    String?
+  type      String?
+  message   String?
+  isRead    Boolean  @default(false)
+  isDeleted Boolean  @default(false)
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notifications")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MAINTAINER
+  OWNER
+  USER
+  WORKER
+  EMPLOYEE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum LoginStatus {
+  SUCCESS
+  FAILED
+  LOGOUT
+  EXPIRED
+}

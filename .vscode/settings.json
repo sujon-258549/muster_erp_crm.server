@@ -1,0 +1,7 @@
+{
+  "prisma.prismaFmtBinPath": "node_modules/prisma/prisma-fmt-windows.exe",
+  "prisma.prismaSchemaPath": "prisma/schema.prisma",
+  "prisma.prismaFmtVersion": "6.11.0",
+  "prisma-smart-formatter.typescript.defaultFormatter": "esbenp.prettier-vscode",
+  "prisma-smart-formatter.typescriptreact.defaultFormatter": "esbenp.prettier-vscode"
+}
