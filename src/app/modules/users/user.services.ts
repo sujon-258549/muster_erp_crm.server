@@ -236,10 +236,7 @@ const getAllUsers = async (query: any) => {
     // take: Number(query.limit),
     include: {
       role: {
-        select: {
-          id: true,
-          role: true,
-        },
+        select: ROLE_SELECT_WITH_PERMISSIONS,
       },
       department: {
         select: {
@@ -299,10 +296,7 @@ const getUserById = async (id: string) => {
     where: { id },
     include: {
       role: {
-        select: {
-          id: true,
-          role: true,
-        },
+        select: ROLE_SELECT_WITH_PERMISSIONS,
       },
       department: {
         select: {
@@ -469,10 +463,7 @@ const updateUser = async (
     data: finalUpdateData,
     include: {
       role: {
-        select: {
-          id: true,
-          role: true,
-        },
+        select: ROLE_SELECT_WITH_PERMISSIONS,
       },
       department: {
         select: {
@@ -525,10 +516,7 @@ const getMyData = async (id: string) => {
     where: { id },
     include: {
       role: {
-        select: {
-          id: true,
-          role: true,
-        },
+        select: ROLE_SELECT_WITH_PERMISSIONS,
       },
       department: {
         select: {
