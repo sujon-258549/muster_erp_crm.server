@@ -74,6 +74,23 @@ const deletePermission = catchAsync(async (req, res) => {
   });
 });
 
+const replacePermissionsForRole = catchAsync(async (req, res) => {
+  const { roleId } = req.params;
+  const { permissions } = req.body as {
+    permissions: { module: string; permissions: string[] }[];
+  };
+  const result = await PermissionServices.replacePermissionsForRole(
+    roleId as string,
+    permissions,
+  );
+  return sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Permissions synced successfully!",
+    data: result,
+  });
+});
+
 export const PermissionControllers = {
   createPermission,
   getAllPermission,
@@ -81,4 +98,5 @@ export const PermissionControllers = {
   getPermissionsByRole,
   updatePermission,
   deletePermission,
+  replacePermissionsForRole,
 };

@@ -14,6 +14,13 @@ router.post(
 );
 router.get("/", auth(), PermissionControllers.getAllPermission);
 router.get("/role/:roleId", auth(), PermissionControllers.getPermissionsByRole);
+// Bulk-sync the full permission map for a role in one atomic call.
+router.put(
+  "/role/:roleId",
+  auth(),
+  validateRequest(PermissionValidation.replacePermissionsForRoleZodSchema),
+  PermissionControllers.replacePermissionsForRole,
+);
 router.get("/:id", auth(), PermissionControllers.getPermissionById);
 router.put(
   "/:id",

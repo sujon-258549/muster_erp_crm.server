@@ -106,6 +106,57 @@ const deletePermission = async (id: string) => {
   return { message: "Permission deleted successfully" };
 };
 
+// Bulk-sync the full permission map for a role in one atomic transaction:
+//   - Modules with a non-empty `permissions` array are upserted.
+//   - Modules sent with an empty array are deleted (the row goes away).
+//   - Modules already in DB but NOT in the payload at all are left as is.
+//     (Send module with [] to revoke.)
+// Returns the fresh row list so the client can reseed its grid.
+const replacePermissionsForRole = async (
+  roleId: string,
+  permissions: { module: string; permissions: string[] }[],
+) => {
+  const roleExists = await prisma.allRole.findUnique({
+    where: { id: roleId },
+    select: { id: true },
+  });
+  if (!roleExists) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Role not found");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const entry of permissions) {
+      const existing = await tx.rolePermission.findFirst({
+        where: { roleId, module: entry.module },
+        select: { id: true },
+      });
+
+      if (entry.permissions.length === 0) {
+        if (existing) {
+          await tx.rolePermission.delete({ where: { id: existing.id } });
+        }
+        continue;
+      }
+
+      if (existing) {
+        await tx.rolePermission.update({
+          where: { id: existing.id },
+          data: { permissions: entry.permissions },
+        });
+      } else {
+        await tx.rolePermission.create({
+          data: { roleId, module: entry.module, permissions: entry.permissions },
+        });
+      }
+    }
+  });
+
+  return await prisma.rolePermission.findMany({
+    where: { roleId },
+    orderBy: { module: "asc" },
+  });
+};
+
 export const PermissionServices = {
   createPermission,
   getAllPermission,
@@ -113,4 +164,5 @@ export const PermissionServices = {
   getPermissionsByRole,
   updatePermission,
   deletePermission,
+  replacePermissionsForRole,
 };
