@@ -9,6 +9,21 @@ import config from "../../config/index.ts";
 import { userSearchableFields } from "./user.constant.ts";
 import { calculatePaginationOrSort } from "../../../shared/calculatePaginationOrSort.tsx";
 
+// Self-action guard — block any user (including super-admin) from
+// performing destructive actions on their own account.
+const assertNotSelf = (
+  targetId: string,
+  currentUserId: string | undefined,
+  action: string,
+) => {
+  if (currentUserId && targetId === currentUserId) {
+    throw new ApiError(
+      status.FORBIDDEN,
+      `You can't ${action} your own account`,
+    );
+  }
+};
+
 function normalizeCategoriesInput(raw: unknown): string[] {
   if (Array.isArray(raw))
     return raw
@@ -325,9 +340,23 @@ const getUserById = async (id: string) => {
 // get all users
 
 // update user
-const updateUser = async (id: string, payload: any) => {
+const updateUser = async (
+  id: string,
+  payload: any,
+  currentUserId?: string,
+) => {
   const { user, profile, address, workInfo } = payload;
   const { password, role, ...rest } = user || {};
+
+  // Self-protection: a user cannot change their own role / roleId.
+  // Other field edits (profile, address, etc.) are fine — only the role
+  // assignment is locked so you can't escalate or demote yourself.
+  const roleIdInPayload = rest?.roleId ?? payload?.roleId;
+  const wantsRoleChange =
+    role !== undefined || roleIdInPayload !== undefined;
+  if (wantsRoleChange) {
+    assertNotSelf(id, currentUserId, "change the role of");
+  }
 
   const updateData: Record<string, unknown> = {};
   const userScalarKeys = [
@@ -682,7 +711,8 @@ const varifyOtp = async (email: string, otp: string) => {
   return updatedUser;
 };
 
-const deleteUser = async (id: string) => {
+const deleteUser = async (id: string, currentUserId?: string) => {
+  assertNotSelf(id, currentUserId, "delete");
   const user = await prisma.user.findUniqueOrThrow({
     where: { id },
   });
