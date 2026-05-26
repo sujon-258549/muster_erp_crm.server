@@ -5,12 +5,13 @@ import { JwtHelpers } from "../../utils/jwtHelpers.ts";
 import config from "../../config/index.ts";
 import argon2 from "argon2";
 import { sendEmail, otpEmailTemplate } from "../../utils/sendEmail.ts";
+import { derivePermissionKeys } from "../../utils/userPermissions.ts";
 
 const loginUser = async (payload: any) => {
   const user = await prisma.user.findUnique({
     where: { email: payload.email },
     include: {
-      role: true,
+      role: { include: { rolePermissions: true } },
       profile: {
         include: {
           profilePhoto: true,
@@ -142,6 +143,7 @@ const loginUser = async (payload: any) => {
       isVerified: user.isVerified,
       isBlocked: user.isBlocked,
       isDeleted: user.isDeleted,
+      permissions: derivePermissionKeys(user.role),
     },
     isLogin: true,
   };
@@ -156,7 +158,7 @@ const refreshToken = async (token: string) => {
   const user = await prisma.user.findUniqueOrThrow({
     where: { email: email },
     include: {
-      role: true,
+      role: { include: { rolePermissions: true } },
       profile: {
         include: {
           profilePhoto: true,
@@ -235,6 +237,7 @@ const refreshToken = async (token: string) => {
       isVerified: user.isVerified,
       isBlocked: user.isBlocked,
       isDeleted: user.isDeleted,
+      permissions: derivePermissionKeys(user.role),
     },
   };
 };

@@ -281,7 +281,10 @@ const getAllUsers = async (query: any) => {
   });
 
   return {
-    data: users.map(({ password, ...rest }) => rest),
+    data: users.map(({ password, ...rest }) => ({
+      ...rest,
+      permissions: derivePermissionKeys(rest.role),
+    })),
     meta: {
       page: pageNumber,
       limit: limitNumber,
@@ -339,7 +342,13 @@ const getUserById = async (id: string) => {
       },
     },
   });
-  return user?.password ? { ...user, password: undefined } : user;
+  if (!user) return user;
+  const { password, ...rest } = user;
+  return {
+    ...rest,
+    password: undefined,
+    permissions: derivePermissionKeys(rest.role),
+  };
 };
 
 // get all users
@@ -559,7 +568,12 @@ const getMyData = async (id: string) => {
       },
     },
   });
-  return user?.password ? { ...user, password: undefined } : user;
+  const { password, ...rest } = user;
+  return {
+    ...rest,
+    password: undefined,
+    permissions: derivePermissionKeys(rest.role),
+  };
 };
 
 // change password
