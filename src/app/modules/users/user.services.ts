@@ -741,7 +741,8 @@ const deleteUser = async (id: string, currentUserId?: string) => {
   return [];
 };
 
-const softDeleteUser = async (id: string) => {
+const softDeleteUser = async (id: string, currentUserId?: string) => {
+  assertNotSelf(id, currentUserId, "delete");
   const user = await prisma.user.findUniqueOrThrow({
     where: { id },
   });
@@ -756,7 +757,8 @@ const softDeleteUser = async (id: string) => {
   return deletedUser;
 };
 
-const blockUser = async (id: string) => {
+const blockUser = async (id: string, currentUserId?: string) => {
+  assertNotSelf(id, currentUserId, "block");
   const user = await prisma.user.findUniqueOrThrow({
     where: { id },
   });
