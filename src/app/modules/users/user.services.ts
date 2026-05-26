@@ -8,6 +8,17 @@ import { JwtHelpers } from "../../utils/jwtHelpers.ts";
 import config from "../../config/index.ts";
 import { userSearchableFields } from "./user.constant.ts";
 import { calculatePaginationOrSort } from "../../../shared/calculatePaginationOrSort.tsx";
+import { derivePermissionKeys } from "../../utils/userPermissions.ts";
+
+// Role select shape reused across every user fetch — includes the joined
+// RolePermission rows so a flat `permissions` array can be derived per user.
+const ROLE_SELECT_WITH_PERMISSIONS = {
+  id: true,
+  role: true,
+  rolePermissions: {
+    select: { module: true, permissions: true },
+  },
+} as const;
 
 // Self-action guard — block any user (including super-admin) from
 // performing destructive actions on their own account.
