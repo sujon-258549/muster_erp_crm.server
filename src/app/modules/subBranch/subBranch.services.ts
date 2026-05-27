@@ -9,11 +9,14 @@ import type { ActorContext } from "../../utils/tenant.ts";
 import { isPlatformAdmin } from "../../utils/tenant.ts";
 
 const assertBranchAccess = async (
-  branchId: string,
+  branchId: string | null | undefined,
   actor: ActorContext,
   ownerOnly = false,
 ) => {
-  const branch = await prisma.branch.findUnique({ where: { id: branchId } });
+  if (!branchId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Branch is required");
+  }
+  const branch = await prisma.mainBranch.findUnique({ where: { id: branchId } });
   if (!branch || branch.isDeleted) {
     throw new ApiError(httpStatus.NOT_FOUND, "Branch not found");
   }
@@ -188,7 +191,7 @@ const updateSubBranch = async (id: string, payload: any, actor: ActorContext) =>
   const data: Prisma.SubBranchUpdateInput = { ...payload };
 
   if (payload.name && payload.name !== existing.name) {
-    const slugBase = slugCreate(`${existing.branch.slug}-${payload.name}`);
+    const slugBase = slugCreate(`${existing.branch?.slug ?? "branch"}-${payload.name}`);
     let slug = slugBase;
     let counter = 1;
     while (

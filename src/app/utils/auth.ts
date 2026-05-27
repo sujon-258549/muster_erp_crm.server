@@ -75,9 +75,9 @@ const auth = (...requiredRoles: UserRoleValue[]) => {
 
     req.user = {
       id: existingUser.id,
-      email: existingUser.email,
+      email: existingUser.email ?? "",
       role: userRoleString,
-      mobile: existingUser.mobile,
+      mobile: existingUser.mobile ?? "",
     };
 
     // Tenant context resolution
@@ -96,7 +96,7 @@ const auth = (...requiredRoles: UserRoleValue[]) => {
 
     if (requestedBranchId) {
       if (!isPlatformAdmin) {
-        const branch = await prisma.branch.findFirst({
+        const branch = await prisma.mainBranch.findFirst({
           where: {
             id: requestedBranchId,
             isDeleted: false,

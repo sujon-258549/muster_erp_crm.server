@@ -3,10 +3,11 @@ import { SubCategoryServices } from "./subCategory.service.ts";
 import sendResponse from "../../utils/response.ts";
 import catchAsync from "../../shared/catchAsync.ts";
 import { pick } from "../../../shared/pick.ts";
+import { actorFromReq } from "../../utils/tenant.ts";
 import { subCategoryFilterableFields } from "./subCategory.constant.ts";
 
 const createSubCategory = catchAsync(async (req, res) => {
-  const result = await SubCategoryServices.createSubCategory(req.body);
+  const result = await SubCategoryServices.createSubCategory(req.body, actorFromReq(req));
   return sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
@@ -19,7 +20,7 @@ const getAllSubCategory = catchAsync(async (req, res) => {
 
   const queryOptions = pick(req.query, subCategoryFilterableFields);
 
-  const result = await SubCategoryServices.getAllSubCategory(queryOptions);
+  const result = await SubCategoryServices.getAllSubCategory(queryOptions, actorFromReq(req));
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -31,7 +32,7 @@ const getAllSubCategory = catchAsync(async (req, res) => {
 
 const getSubCategoryById = catchAsync(async (req, res) => {
   const id = req.params.id;
-  const result = await SubCategoryServices.getSubCategoryById(id as string);
+  const result = await SubCategoryServices.getSubCategoryById(id as string, actorFromReq(req));
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -56,6 +57,7 @@ const updateSubCategory = catchAsync(async (req, res) => {
   const result = await SubCategoryServices.updateSubCategory(
     id as string,
     req.body,
+    actorFromReq(req),
   );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -67,7 +69,10 @@ const updateSubCategory = catchAsync(async (req, res) => {
 
 const deleteSubCategory = catchAsync(async (req, res) => {
   const id = req.params.id;
-  const result = await SubCategoryServices.deleteSubCategory(id as string);
+  const result = await SubCategoryServices.deleteSubCategory(
+    id as string,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -80,6 +85,7 @@ const updateSubCategoryStatus = catchAsync(async (req, res) => {
   const id = req.params.id;
   const result = await SubCategoryServices.updateSubCategoryStatus(
     id as string,
+    actorFromReq(req),
   );
   return sendResponse(res, {
     statusCode: httpStatus.OK,

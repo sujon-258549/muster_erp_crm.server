@@ -1,16 +1,16 @@
 import type { NextFunction, Request, Response } from "express";
 import status from "http-status";
 import { pick } from "../../../shared/pick.ts";
-import { branchFilterableFields } from "./branch.const.ts";
+import { mainBranchFilterableFields } from "./mainBranch.const.ts";
 import catchAsync from "../../shared/catchAsync.ts";
-import { BranchServices } from "./branch.services.ts";
+import { MainBranchServices } from "./mainBranch.services.ts";
 import sendResponse from "../../utils/response.ts";
 import { actorFromReq } from "../../utils/tenant.ts";
 
-const createBranch = catchAsync(
+const createMainBranch = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const ownerId = req.user?.id as string;
-    const result = await BranchServices.createBranchIntoDB(
+    const result = await MainBranchServices.createMainBranchIntoDB(
       ownerId,
       req.body,
       actorFromReq(req),
@@ -18,53 +18,53 @@ const createBranch = catchAsync(
     sendResponse(res, {
       success: true,
       statusCode: status.CREATED,
-      message: "Branch created successfully",
+      message: "Main branch created successfully",
       data: result,
       meta: undefined,
     });
   },
 );
 
-const getAllBranches = catchAsync(
+const getAllMainBranches = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const query = pick(req.query, [
-      ...branchFilterableFields,
+      ...mainBranchFilterableFields,
       "page",
       "limit",
       "sortBy",
       "sortOrder",
     ]);
-    const result = await BranchServices.getAllBranches(query, actorFromReq(req));
+    const result = await MainBranchServices.getAllMainBranches(query, actorFromReq(req));
     sendResponse(res, {
       success: true,
       statusCode: status.OK,
-      message: "Branches retrieved successfully",
+      message: "Main branches retrieved successfully",
       data: result.data,
       meta: result.meta,
     });
   },
 );
 
-const getBranchById = catchAsync(
+const getMainBranchById = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id;
-    const result = await BranchServices.getBranchById(
+    const result = await MainBranchServices.getMainBranchById(
       id as string,
       actorFromReq(req),
     );
     sendResponse(res, {
       success: true,
       statusCode: status.OK,
-      message: "Branch retrieved successfully",
+      message: "Main branch retrieved successfully",
       data: result,
     });
   },
 );
 
-const updateBranch = catchAsync(
+const updateMainBranch = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id;
-    const result = await BranchServices.updateBranch(
+    const result = await MainBranchServices.updateMainBranch(
       id as string,
       req.body,
       actorFromReq(req),
@@ -72,49 +72,49 @@ const updateBranch = catchAsync(
     sendResponse(res, {
       success: true,
       statusCode: status.OK,
-      message: "Branch updated successfully",
+      message: "Main branch updated successfully",
       data: result,
     });
   },
 );
 
-const deleteBranch = catchAsync(
+const deleteMainBranch = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id;
-    const result = await BranchServices.deleteBranch(
+    const result = await MainBranchServices.deleteMainBranch(
       id as string,
       actorFromReq(req),
     );
     sendResponse(res, {
       success: true,
       statusCode: status.OK,
-      message: "Branch deleted successfully",
+      message: "Main branch deleted successfully",
       data: result,
     });
   },
 );
 
-const updateBranchStatus = catchAsync(
+const updateMainBranchStatus = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id;
-    const result = await BranchServices.updateBranchStatus(
+    const result = await MainBranchServices.updateMainBranchStatus(
       id as string,
       actorFromReq(req),
     );
     sendResponse(res, {
       success: true,
       statusCode: status.OK,
-      message: "Branch status updated successfully",
+      message: "Main branch status updated successfully",
       data: result,
     });
   },
 );
 
-export const BranchController = {
-  createBranch,
-  getAllBranches,
-  getBranchById,
-  updateBranch,
-  deleteBranch,
-  updateBranchStatus,
+export const MainBranchController = {
+  createMainBranch,
+  getAllMainBranches,
+  getMainBranchById,
+  updateMainBranch,
+  deleteMainBranch,
+  updateMainBranchStatus,
 };

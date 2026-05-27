@@ -7,6 +7,7 @@ import { BlogRoutes } from "../modules/blog/blog.routes.ts";
 import { MediaRoutes } from "../modules/media/media.routes.js";
 import { FolderRoutes } from "../modules/folder/folder.routes.ts";
 import { SubscriptionRoutes } from "../modules/subscription/subscription.routes.ts";
+import { SubscriptionPlanRoutes } from "../modules/subscriptionPlan/subscriptionPlan.routes.ts";
 import { CommentRoutes } from "../modules/comment/comment.routes.ts";
 import { NotificationRoutes } from "../modules/notification/notification.routes.ts";
 import { PaymentRoutes } from "../modules/payment/payment.routes.ts";
@@ -14,7 +15,7 @@ import { DepartmentRouter } from "../modules/department/department.router.ts";
 import { RoleRoutes } from "../modules/role/role.routes.ts";
 import { PermissionRoutes } from "../modules/permission/permission.routes.ts";
 import { WorkTypeRouter } from "../modules/workType/workType.router.ts";
-import { BranchRouter } from "../modules/branch/branch.router.ts";
+import { MainBranchRouter } from "../modules/mainBranch/mainBranch.router.ts";
 import { SubBranchRouter } from "../modules/subBranch/subBranch.router.ts";
 import { DesignationRouter } from "../modules/designation/designation.router.ts";
 
@@ -54,6 +55,10 @@ const allRouter = [
     router: SubscriptionRoutes,
   },
   {
+    path: "/subscription-plan",
+    router: SubscriptionPlanRoutes,
+  },
+  {
     path: "/blog",
     router: BlogRoutes,
   },
@@ -82,8 +87,8 @@ const allRouter = [
     router: WorkTypeRouter,
   },
   {
-    path: "/branch",
-    router: BranchRouter,
+    path: "/main-branch",
+    router: MainBranchRouter,
   },
   {
     path: "/sub-branch",

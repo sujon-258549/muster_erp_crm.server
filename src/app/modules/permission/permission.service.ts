@@ -5,14 +5,32 @@ import ApiError from "../../middleware/apiError.ts";
 import { permissionSearchableFields } from "./permission.constant.ts";
 import { calculatePaginationOrSort } from "../../../shared/calculatePaginationOrSort.tsx";
 import { getIO } from "../../utils/socket.ts";
+import {
+  assertTenantAccess,
+  isPlatformAdmin,
+  type ActorContext,
+} from "../../utils/tenant.ts";
 
-const createPermission = async (payload: any) => {
+// RolePermission has no branchId of its own — its tenant scope is
+// inherited from the Role it belongs to. Resolve it via the relation.
+const resolveRoleBranchId = async (roleId: string | null | undefined) => {
+  if (!roleId) return null;
+  const role = await prisma.allRole.findUnique({
+    where: { id: roleId },
+    select: { branchId: true },
+  });
+  return role?.branchId ?? null;
+};
+
+const createPermission = async (payload: any, actor?: ActorContext) => {
   const roleExists = await prisma.allRole.findUnique({
     where: { id: payload.roleId },
+    select: { id: true, branchId: true },
   });
   if (!roleExists) {
     throw new ApiError(httpStatus.NOT_FOUND, "Role not found");
   }
+  if (actor) assertTenantAccess(actor, roleExists.branchId);
 
   const duplicate = await prisma.rolePermission.findFirst({
     where: { roleId: payload.roleId, module: payload.module },
@@ -28,7 +46,7 @@ const createPermission = async (payload: any) => {
   return result;
 };
 
-const getAllPermission = async (query: any) => {
+const getAllPermission = async (query: any, actor?: ActorContext) => {
   const { searchTerm, page, limit, sortBy, sortOrder, ...queryFilter } = query;
 
   const andCondition: Prisma.RolePermissionWhereInput[] = [];
@@ -49,6 +67,12 @@ const getAllPermission = async (query: any) => {
         [key]: { equals: queryFilter[key as keyof typeof queryFilter] },
       })),
     });
+  }
+
+  // Tenant scoping — non-platform users only see permission rows whose
+  // parent Role lives in their branch.
+  if (actor && !isPlatformAdmin(actor.role)) {
+    andCondition.push({ role: { branchId: actor.branchId ?? null } });
   }
 
   // Only include the AND key when we actually have conditions; with
@@ -73,16 +97,18 @@ const getAllPermission = async (query: any) => {
   };
 };
 
-const getPermissionById = async (id: string) => {
+const getPermissionById = async (id: string, actor?: ActorContext) => {
   const result = await prisma.rolePermission.findUnique({
     where: { id },
     include: { role: true },
   });
   if (!result) throw new ApiError(httpStatus.NOT_FOUND, "Permission not found");
+  if (actor) assertTenantAccess(actor, result.role?.branchId ?? null);
   return result;
 };
 
-const getPermissionsByRole = async (roleId: string) => {
+const getPermissionsByRole = async (roleId: string, actor?: ActorContext) => {
+  if (actor) assertTenantAccess(actor, await resolveRoleBranchId(roleId));
   const result = await prisma.rolePermission.findMany({
     where: { roleId },
     orderBy: { module: "asc" },
@@ -90,9 +116,17 @@ const getPermissionsByRole = async (roleId: string) => {
   return result;
 };
 
-const updatePermission = async (id: string, payload: any) => {
-  const exists = await prisma.rolePermission.findUnique({ where: { id } });
+const updatePermission = async (
+  id: string,
+  payload: any,
+  actor?: ActorContext,
+) => {
+  const exists = await prisma.rolePermission.findUnique({
+    where: { id },
+    select: { id: true, roleId: true },
+  });
   if (!exists) throw new ApiError(httpStatus.NOT_FOUND, "Permission not found");
+  if (actor) assertTenantAccess(actor, await resolveRoleBranchId(exists.roleId));
 
   const result = await prisma.rolePermission.update({
     where: { id },
@@ -101,9 +135,13 @@ const updatePermission = async (id: string, payload: any) => {
   return result;
 };
 
-const deletePermission = async (id: string) => {
-  const exists = await prisma.rolePermission.findUnique({ where: { id } });
+const deletePermission = async (id: string, actor?: ActorContext) => {
+  const exists = await prisma.rolePermission.findUnique({
+    where: { id },
+    select: { id: true, roleId: true },
+  });
   if (!exists) throw new ApiError(httpStatus.NOT_FOUND, "Permission not found");
+  if (actor) assertTenantAccess(actor, await resolveRoleBranchId(exists.roleId));
 
   await prisma.rolePermission.delete({ where: { id } });
   return { message: "Permission deleted successfully" };
@@ -118,14 +156,16 @@ const deletePermission = async (id: string) => {
 const replacePermissionsForRole = async (
   roleId: string,
   permissions: { module: string; permissions: string[] }[],
+  actor?: ActorContext,
 ) => {
   const roleExists = await prisma.allRole.findUnique({
     where: { id: roleId },
-    select: { id: true },
+    select: { id: true, branchId: true },
   });
   if (!roleExists) {
     throw new ApiError(httpStatus.NOT_FOUND, "Role not found");
   }
+  if (actor) assertTenantAccess(actor, roleExists.branchId);
 
   await prisma.$transaction(async (tx) => {
     for (const entry of permissions) {

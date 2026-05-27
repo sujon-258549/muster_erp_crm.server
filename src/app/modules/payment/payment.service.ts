@@ -4,6 +4,27 @@ import prisma from "../../utils/prismaClient.js";
 import { sslServices, sslValidatePayment } from "../ssl/sslservises.ts";
 import status from "http-status";
 import config from "../../config/index.ts";
+import {
+  assertTenantAccess,
+  isPlatformAdmin,
+  type ActorContext,
+} from "../../utils/tenant.ts";
+
+// Payment is linked to a Subscription which carries the branchId. Build
+// a where-clause that scopes via the relation.
+const tenantWhere = (
+  actor?: ActorContext,
+): { subscription?: { branchId: string | null } } => {
+  if (!actor || isPlatformAdmin(actor.role)) return {};
+  return { subscription: { branchId: actor.branchId ?? null } };
+};
+
+// Loads a payment with its subscription so we can assert tenant access.
+const loadWithBranch = async (id: string) =>
+  prisma.payment.findUnique({
+    where: { id },
+    include: { subscription: { select: { branchId: true } } },
+  });
 
 const createPayment = async (userId: string, id: string) => {
   const existUser = await prisma.user.findUniqueOrThrow({
@@ -24,6 +45,7 @@ const createPayment = async (userId: string, id: string) => {
     where: {
       id: id,
     },
+    include: { plan: true },
   });
 
   if (!existService) {
@@ -51,12 +73,12 @@ const createPayment = async (userId: string, id: string) => {
   const createTranId = `TRAN-${year}${month}-${incrementId + 1}`;
 
   const data = {
-    total_amount: existService.price,
-    currency: "BDT",
+    total_amount: existService.plan?.price,
+    currency: existService.plan?.currency ?? "BDT",
     tran_id: createTranId, // use unique tran_id for each api call,
     shipping_method: "Courier",
-    product_name: existService.name,
-    product_category: existService.name,
+    product_name: existService.plan?.name,
+    product_category: existService.plan?.name,
     product_profile: "general",
     cus_name: existUser?.profile?.name,
     cus_email: existUser.email,
@@ -74,7 +96,7 @@ const createPayment = async (userId: string, id: string) => {
   const createPayment = await prisma.payment.create({
     data: {
       transactionId: createTranId,
-      amount: Number(existService.price),
+      amount: Number(existService.plan?.price ?? 0),
       status: "PENDING",
       userId: existUser.id,
       subscriptionId: existService.id,
@@ -116,32 +138,41 @@ const validatePayment = async (payload: any) => {
   };
 };
 
-const getAllPayment = async () => {
-  const result = await prisma.payment.findMany({});
-  return {
-    data: result,
-  };
+const getAllPayment = async (actor?: ActorContext) => {
+  const result = await prisma.payment.findMany({
+    where: tenantWhere(actor),
+    include: { subscription: { include: { plan: true, branch: true } } },
+  });
+  return { data: result };
 };
 
-const getPaymentById = async (id: string) => {
-  const result = await prisma.payment.findUnique({
-    where: { id },
-  });
+const getPaymentById = async (id: string, actor?: ActorContext) => {
+  const result = await loadWithBranch(id);
+  if (!result) throw new ApiError(status.NOT_FOUND, "Payment not found");
+  if (actor) assertTenantAccess(actor, result.subscription?.branchId ?? null);
   return result;
 };
 
-const updatePayment = async (id: string, payload: any) => {
-  const result = await prisma.payment.update({
-    where: { id },
-    data: payload,
-  });
-  return result;
+const updatePayment = async (
+  id: string,
+  payload: any,
+  actor?: ActorContext,
+) => {
+  const existing = await loadWithBranch(id);
+  if (!existing) throw new ApiError(status.NOT_FOUND, "Payment not found");
+  if (actor)
+    assertTenantAccess(actor, existing.subscription?.branchId ?? null);
+
+  return prisma.payment.update({ where: { id }, data: payload });
 };
 
-const deletePayment = async (id: string) => {
-  await prisma.payment.delete({
-    where: { id },
-  });
+const deletePayment = async (id: string, actor?: ActorContext) => {
+  const existing = await loadWithBranch(id);
+  if (!existing) throw new ApiError(status.NOT_FOUND, "Payment not found");
+  if (actor)
+    assertTenantAccess(actor, existing.subscription?.branchId ?? null);
+
+  await prisma.payment.delete({ where: { id } });
   return { message: "Payment deleted successfully" };
 };
 

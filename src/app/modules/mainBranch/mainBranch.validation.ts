@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const createBranchZodSchema = z.object({
+const createMainBranchZodSchema = z.object({
   body: z.object({
     name: z.string().min(1, "Name is required"),
     description: z.string().optional(),
@@ -21,7 +21,7 @@ const createBranchZodSchema = z.object({
   }),
 });
 
-const updateBranchZodSchema = z.object({
+const updateMainBranchZodSchema = z.object({
   body: z.object({
     name: z.string().optional(),
     description: z.string().optional(),
@@ -43,7 +43,7 @@ const updateBranchZodSchema = z.object({
   }),
 });
 
-export const BranchValidation = {
-  createBranchZodSchema,
-  updateBranchZodSchema,
+export const MainBranchValidation = {
+  createMainBranchZodSchema,
+  updateMainBranchZodSchema,
 };

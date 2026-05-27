@@ -5,6 +5,7 @@ import status from "http-status";
 import catchAsync from "../../shared/catchAsync.js";
 import { pick } from "../../../shared/pick.ts";
 import { userFilterableFields } from "./user.constant.ts";
+import { actorFromReq } from "../../utils/tenant.ts";
 
 const createUser = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -23,7 +24,10 @@ const createUser = catchAsync(
 const getUserById = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const result = await UserServices.getUserById(id as string);
+    const result = await UserServices.getUserById(
+      id as string,
+      actorFromReq(req),
+    );
     sendResponse(res, {
       success: true,
       statusCode: status.OK,
@@ -35,7 +39,7 @@ const getUserById = catchAsync(
 
 const getAllUsers = catchAsync(async (req: Request, res: Response) => {
   const query = pick(req.query, userFilterableFields);
-  const result = await UserServices.getAllUsers(query);
+  const result = await UserServices.getAllUsers(query, actorFromReq(req));
   sendResponse(res, {
     success: true,
     statusCode: status.OK,
@@ -52,6 +56,7 @@ const updateUser = catchAsync(async (req: Request, res: Response) => {
     id as string,
     payload,
     req.user?.id,
+    actorFromReq(req),
   );
   sendResponse(res, {
     success: true,
@@ -100,7 +105,11 @@ const varifyOtp = catchAsync(async (req: Request, res: Response) => {
 
 const deleteUser = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const result = await UserServices.deleteUser(id as string, req.user?.id);
+  const result = await UserServices.deleteUser(
+    id as string,
+    req.user?.id,
+    actorFromReq(req),
+  );
   sendResponse(res, {
     success: true,
     statusCode: status.OK,
@@ -111,7 +120,11 @@ const deleteUser = catchAsync(async (req: Request, res: Response) => {
 
 const softDeleteUser = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const result = await UserServices.softDeleteUser(id as string, req.user?.id);
+  const result = await UserServices.softDeleteUser(
+    id as string,
+    req.user?.id,
+    actorFromReq(req),
+  );
   sendResponse(res, {
     success: true,
     statusCode: status.OK,
@@ -122,7 +135,11 @@ const softDeleteUser = catchAsync(async (req: Request, res: Response) => {
 
 const blockUser = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const result = await UserServices.blockUser(id as string, req.user?.id);
+  const result = await UserServices.blockUser(
+    id as string,
+    req.user?.id,
+    actorFromReq(req),
+  );
   sendResponse(res, {
     success: true,
     statusCode: status.OK,

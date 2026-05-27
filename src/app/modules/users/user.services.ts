@@ -9,6 +9,12 @@ import config from "../../config/index.ts";
 import { userSearchableFields } from "./user.constant.ts";
 import { calculatePaginationOrSort } from "../../../shared/calculatePaginationOrSort.tsx";
 import { derivePermissionRows } from "../../utils/userPermissions.ts";
+import {
+  assertTenantAccess,
+  isPlatformAdmin,
+  tenantFilter,
+  type ActorContext,
+} from "../../utils/tenant.ts";
 
 // Role select shape reused across every user fetch — includes the joined
 // RolePermission rows so a flat `permissions` array can be derived per user.
@@ -187,7 +193,7 @@ const createUserIntoDB = async (payload: any) => {
 };
 
 // get all users
-const getAllUsers = async (query: any) => {
+const getAllUsers = async (query: any, actor?: ActorContext) => {
   const { searchTerm, page, limit, sortBy, sortOrder, ...queryFilter } = query;
 
   const andCondition: Prisma.UserWhereInput[] = [];
@@ -223,6 +229,11 @@ const getAllUsers = async (query: any) => {
     });
   }
 
+  // Tenant scoping — non-platform users only see users in their own branch.
+  if (actor) {
+    andCondition.push(tenantFilter(actor) as Prisma.UserWhereInput);
+  }
+
   const whereCondition: Prisma.UserWhereInput = {
     AND: andCondition,
   };
@@ -254,6 +265,20 @@ const getAllUsers = async (query: any) => {
         select: {
           id: true,
           name: true,
+        },
+      },
+      // Branch + its active subscription + plan — used by the Branch
+      // Super Admin list so each row can show the plan they're on.
+      branch: {
+        select: {
+          id: true,
+          name: true,
+          subscriptions: {
+            where: { isActive: true, isDeleted: false },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { plan: true },
+          },
         },
       },
       profile: {
@@ -306,7 +331,7 @@ const getAllUsers = async (query: any) => {
 };
 
 // get user by id
-const getUserById = async (id: string) => {
+const getUserById = async (id: string, actor?: ActorContext) => {
   const user = await prisma.user.findUnique({
     where: { id },
     include: {
@@ -323,6 +348,20 @@ const getUserById = async (id: string) => {
         select: {
           id: true,
           name: true,
+        },
+      },
+      // Branch + its active subscription + plan — used by the Branch
+      // Super Admin list so each row can show the plan they're on.
+      branch: {
+        select: {
+          id: true,
+          name: true,
+          subscriptions: {
+            where: { isActive: true, isDeleted: false },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { plan: true },
+          },
         },
       },
       profile: {
@@ -361,6 +400,7 @@ const getUserById = async (id: string) => {
     },
   });
   if (!user) return user;
+  if (actor) assertTenantAccess(actor, user.branchId);
   const { password, ...rest } = user;
   return {
     ...rest,
@@ -376,18 +416,49 @@ const updateUser = async (
   id: string,
   payload: any,
   currentUserId?: string,
+  actor?: ActorContext,
 ) => {
   const { user, profile, address, workInfo } = payload;
   const { password, role, ...rest } = user || {};
 
+  // Tenant scoping — non-platform users can't read or touch a user that
+  // belongs to a different branch. Also forbid moving a user across
+  // branches (only platform admin can do that).
+  if (actor && !isPlatformAdmin(actor.role)) {
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { branchId: true },
+    });
+    if (!target) {
+      throw new ApiError(status.NOT_FOUND, "User not found");
+    }
+    assertTenantAccess(actor, target.branchId);
+    const incomingBranchId = rest?.branchId ?? payload?.branchId;
+    if (
+      incomingBranchId !== undefined &&
+      incomingBranchId !== target.branchId
+    ) {
+      throw new ApiError(
+        status.FORBIDDEN,
+        "Cannot move a user to another branch",
+      );
+    }
+  }
+
   // Self-protection: a user cannot change their own role / roleId.
-  // Other field edits (profile, address, etc.) are fine — only the role
-  // assignment is locked so you can't escalate or demote yourself.
+  // We compare against the existing record so re-sending the same role
+  // (the common case when a form posts the full object back) doesn't
+  // trigger the guard — only an actual change does.
   const roleIdInPayload = rest?.roleId ?? payload?.roleId;
-  const wantsRoleChange =
-    role !== undefined || roleIdInPayload !== undefined;
-  if (wantsRoleChange) {
-    assertNotSelf(id, currentUserId, "change the role of");
+  if (roleIdInPayload !== undefined || role !== undefined) {
+    const existing = await prisma.user.findUnique({
+      where: { id },
+      select: { roleId: true },
+    });
+    const newRoleId = roleIdInPayload ?? null;
+    if (existing && newRoleId !== existing.roleId) {
+      assertNotSelf(id, currentUserId, "change the role of");
+    }
   }
 
   const updateData: Record<string, unknown> = {};
@@ -506,6 +577,20 @@ const updateUser = async (
           name: true,
         },
       },
+      // Branch + its active subscription + plan — used by the Branch
+      // Super Admin list so each row can show the plan they're on.
+      branch: {
+        select: {
+          id: true,
+          name: true,
+          subscriptions: {
+            where: { isActive: true, isDeleted: false },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { plan: true },
+          },
+        },
+      },
       profile: {
         include: {
           profilePhoto: {
@@ -563,6 +648,20 @@ const getMyData = async (id: string) => {
         select: {
           id: true,
           name: true,
+        },
+      },
+      // Branch + its active subscription + plan — used by the Branch
+      // Super Admin list so each row can show the plan they're on.
+      branch: {
+        select: {
+          id: true,
+          name: true,
+          subscriptions: {
+            where: { isActive: true, isDeleted: false },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { plan: true },
+          },
         },
       },
       profile: {
@@ -777,7 +876,11 @@ const varifyOtp = async (email: string, otp: string) => {
   return updatedUser;
 };
 
-const deleteUser = async (id: string, currentUserId?: string) => {
+const deleteUser = async (
+  id: string,
+  currentUserId?: string,
+  actor?: ActorContext,
+) => {
   assertNotSelf(id, currentUserId, "delete");
   const user = await prisma.user.findUniqueOrThrow({
     where: { id },
@@ -785,6 +888,7 @@ const deleteUser = async (id: string, currentUserId?: string) => {
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "🔍❓ User not Found");
   }
+  if (actor) assertTenantAccess(actor, user.branchId);
 
   // Delete related records using mobile (since they relate via mobile field)
   await prisma.otp.deleteMany({
@@ -807,7 +911,11 @@ const deleteUser = async (id: string, currentUserId?: string) => {
   return [];
 };
 
-const softDeleteUser = async (id: string, currentUserId?: string) => {
+const softDeleteUser = async (
+  id: string,
+  currentUserId?: string,
+  actor?: ActorContext,
+) => {
   assertNotSelf(id, currentUserId, "delete");
   const user = await prisma.user.findUniqueOrThrow({
     where: { id },
@@ -815,6 +923,7 @@ const softDeleteUser = async (id: string, currentUserId?: string) => {
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "🔍❓ User not Found");
   }
+  if (actor) assertTenantAccess(actor, user.branchId);
 
   const deletedUser = await prisma.user.update({
     where: { id },
@@ -823,7 +932,11 @@ const softDeleteUser = async (id: string, currentUserId?: string) => {
   return deletedUser;
 };
 
-const blockUser = async (id: string, currentUserId?: string) => {
+const blockUser = async (
+  id: string,
+  currentUserId?: string,
+  actor?: ActorContext,
+) => {
   assertNotSelf(id, currentUserId, "block");
   const user = await prisma.user.findUniqueOrThrow({
     where: { id },
@@ -831,6 +944,7 @@ const blockUser = async (id: string, currentUserId?: string) => {
   if (!user) {
     throw new ApiError(status.NOT_FOUND, "🔍❓ User not Found");
   }
+  if (actor) assertTenantAccess(actor, user.branchId);
 
   const deletedUser = await prisma.user.update({
     where: { id },

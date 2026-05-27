@@ -4,9 +4,13 @@ import sendResponse from "../../utils/response.ts";
 import { pick } from "../../../shared/pick.ts";
 import { designationFilterableFields } from "./designation.const.ts";
 import { DesignationServices } from "./designation.services.ts";
+import { actorFromReq } from "../../utils/tenant.ts";
 
 const createDesignation = catchAsync(async (req, res) => {
-  const result = await DesignationServices.createDesignation(req.body);
+  const result = await DesignationServices.createDesignation(
+    req.body,
+    actorFromReq(req),
+  );
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
@@ -23,7 +27,10 @@ const getAllDesignations = catchAsync(async (req, res) => {
     "sortBy",
     "sortOrder",
   ]);
-  const result = await DesignationServices.getAllDesignations(query);
+  const result = await DesignationServices.getAllDesignations(
+    query,
+    actorFromReq(req),
+  );
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -35,7 +42,10 @@ const getAllDesignations = catchAsync(async (req, res) => {
 
 const getDesignationById = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await DesignationServices.getDesignationById(id as string);
+  const result = await DesignationServices.getDesignationById(
+    id as string,
+    actorFromReq(req),
+  );
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -46,7 +56,11 @@ const getDesignationById = catchAsync(async (req, res) => {
 
 const updateDesignation = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await DesignationServices.updateDesignation(id as string, req.body);
+  const result = await DesignationServices.updateDesignation(
+    id as string,
+    req.body,
+    actorFromReq(req),
+  );
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -57,7 +71,10 @@ const updateDesignation = catchAsync(async (req, res) => {
 
 const deleteDesignation = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await DesignationServices.deleteDesignation(id as string);
+  const result = await DesignationServices.deleteDesignation(
+    id as string,
+    actorFromReq(req),
+  );
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -68,7 +85,10 @@ const deleteDesignation = catchAsync(async (req, res) => {
 
 const updateDesignationStatus = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await DesignationServices.updateDesignationStatus(id as string);
+  const result = await DesignationServices.updateDesignationStatus(
+    id as string,
+    actorFromReq(req),
+  );
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,

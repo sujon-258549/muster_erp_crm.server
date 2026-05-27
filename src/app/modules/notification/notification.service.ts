@@ -93,8 +93,10 @@ const updateNotification = async (
   });
 
   try {
-    const io = getIO();
-    io.to(result.userId).emit("notification-updated", result);
+    if (result.userId) {
+      const io = getIO();
+      io.to(result.userId).emit("notification-updated", result);
+    }
   } catch (error) {
     console.error("Socket emit error:", error);
   }

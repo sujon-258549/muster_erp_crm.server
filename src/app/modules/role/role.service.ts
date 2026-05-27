@@ -4,19 +4,46 @@ import prisma from "../../utils/prismaClient.ts";
 import ApiError from "../../middleware/apiError.ts";
 import { roleSearchableFields } from "./role.constant.ts";
 import { calculatePaginationOrSort } from "../../../shared/calculatePaginationOrSort.tsx";
+import {
+  assertTenantAccess,
+  isPlatformAdmin,
+  type ActorContext,
+} from "../../utils/tenant.ts";
 
-const createRole = async (payload: any) => {
+// Roles are now per-tenant. Branch Super Admins create + see roles for
+// their own branch only. Platform admins can also create global roles
+// (branchId = null) like SUPER_ADMIN.
+
+const createRole = async (payload: any, actor?: ActorContext) => {
+  // Force-scope: a non-platform admin can only create a role in their
+  // own branch — never globally, never in another tenant's branch.
+  let superAdminRole = await prisma.allRole.findFirst({
+    where: { role: "SUPER_ADMIN" },
+  });
+  if (!superAdminRole) {
+    throw new ApiError(
+      httpStatus.INTERNAL_SERVER_ERROR,
+      "SUPER_ADMIN role must exist before creating any other roles",
+    );
+  }
+  const branchId =
+    actor && !isPlatformAdmin(actor.role)
+      ? (actor.branchId ?? null)
+      : (payload.branchId ?? null);
+
   const isExist = await prisma.allRole.findFirst({
-    where: { role: payload.role },
+    where: { role: payload.role, branchId },
   });
   if (isExist) {
     throw new ApiError(httpStatus.BAD_REQUEST, "Role already exists");
   }
-  const result = await prisma.allRole.create({ data: payload });
+  const result = await prisma.allRole.create({
+    data: { ...payload, branchId },
+  });
   return result;
 };
 
-const getAllRole = async (query: any) => {
+const getAllRole = async (query: any, actor?: ActorContext) => {
   const { searchTerm, page, limit, sortBy, sortOrder, ...queryFilter } = query;
 
   const andCondition: Prisma.AllRoleWhereInput[] = [];
@@ -42,6 +69,11 @@ const getAllRole = async (query: any) => {
         },
       })),
     });
+  }
+
+  // Tenant scoping — non-platform users see only roles in their branch.
+  if (actor && !isPlatformAdmin(actor.role)) {
+    andCondition.push({ branchId: actor.branchId ?? null });
   }
 
   const whereCondition: Prisma.AllRoleWhereInput = {
@@ -71,13 +103,30 @@ const getAllRole = async (query: any) => {
   };
 };
 
-const getRoleById = async (id: string) => {
+const getRoleById = async (id: string, actor?: ActorContext) => {
   const result = await prisma.allRole.findUnique({ where: { id } });
   if (!result) throw new ApiError(httpStatus.NOT_FOUND, "Role not found");
+  if (actor) assertTenantAccess(actor, result.branchId);
   return result;
 };
 
-const updateRole = async (id: string, payload: any) => {
+const updateRole = async (id: string, payload: any, actor?: ActorContext) => {
+  const existing = await prisma.allRole.findUnique({ where: { id } });
+  if (!existing) throw new ApiError(httpStatus.NOT_FOUND, "Role not found");
+  if (actor) {
+    assertTenantAccess(actor, existing.branchId);
+    if (
+      !isPlatformAdmin(actor.role) &&
+      payload.branchId &&
+      payload.branchId !== existing.branchId
+    ) {
+      throw new ApiError(
+        httpStatus.FORBIDDEN,
+        "Cannot move a role to another branch",
+      );
+    }
+  }
+
   const result = await prisma.allRole.update({
     where: { id },
     data: payload,
@@ -85,16 +134,22 @@ const updateRole = async (id: string, payload: any) => {
   return result;
 };
 
-const deleteRole = async (id: string) => {
+const deleteRole = async (id: string, actor?: ActorContext) => {
+  const existing = await prisma.allRole.findUnique({ where: { id } });
+  if (!existing) throw new ApiError(httpStatus.NOT_FOUND, "Role not found");
+  if (actor) assertTenantAccess(actor, existing.branchId);
+
   await prisma.allRole.delete({ where: { id } });
   return { message: "Role deleted successfully" };
 };
 
-const updateRoleStatus = async (id: string) => {
+const updateRoleStatus = async (id: string, actor?: ActorContext) => {
   const isExist = await prisma.allRole.findUnique({ where: { id } });
   if (!isExist) {
     throw new ApiError(httpStatus.NOT_FOUND, "Role not found");
   }
+  if (actor) assertTenantAccess(actor, isExist.branchId);
+
   const result = await prisma.allRole.update({
     where: { id },
     data: { isActive: !isExist.isActive },

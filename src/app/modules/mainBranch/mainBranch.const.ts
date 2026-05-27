@@ -1,4 +1,4 @@
-export const branchFilterableFields = [
+export const mainBranchFilterableFields = [
   "searchTerm",
   "name",
   "ownerId",
@@ -8,7 +8,7 @@ export const branchFilterableFields = [
   "isDeleted",
 ];
 
-export const branchSearchableFields = [
+export const mainBranchSearchableFields = [
   "name",
   "description",
   "email",

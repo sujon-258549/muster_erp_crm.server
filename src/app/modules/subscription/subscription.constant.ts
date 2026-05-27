@@ -4,7 +4,17 @@ export const SubscriptionConstants = {
 };
 
 
-export const subscriptionSearchableFields = ["name","description","price","duration","status","createdAt","updatedAt"]
+// Subscription is now a pure instance — all plan-detail fields live on the
+// related SubscriptionPlan. Keep searchable to instance fields only.
+export const subscriptionSearchableFields = ["notes"]
 
-
-export const subscriptionFilterableFields = ["name","description","price","duration","status","createdAt","updatedAt", "page", "limit", "sortBy", "sortOrder"]
+export const subscriptionFilterableFields = [
+  "branchId",
+  "planId",
+  "isActive",
+  "isDeleted",
+  "page",
+  "limit",
+  "sortBy",
+  "sortOrder",
+]

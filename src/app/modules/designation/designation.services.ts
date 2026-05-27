@@ -5,12 +5,30 @@ import { calculatePaginationOrSort } from "../../../shared/calculatePaginationOr
 import { designationSearchableFields } from "./designation.const.ts";
 import prisma from "../../utils/prismaClient.ts";
 import slugCreate from "../../utils/slugCreate.ts";
+import {
+  assertTenantAccess,
+  isPlatformAdmin,
+  type ActorContext,
+} from "../../utils/tenant.ts";
 
-const createDesignation = async (payload: any) => {
+// Designations are now per-tenant. Branch Super Admins create + see their
+// own list; other tenants can't see them. Platform admins can also create
+// global designations (branchId = null) as templates.
+
+const createDesignation = async (payload: any, actor?: ActorContext) => {
+  // Force-scope to caller's branch for non-platform users.
+  const branchId =
+    actor && !isPlatformAdmin(actor.role)
+      ? (actor.branchId ?? null)
+      : (payload.branchId ?? null);
+
   const slug = payload.slug || slugCreate(payload.name);
 
   const exists = await prisma.designation.findFirst({
-    where: { OR: [{ name: payload.name }, { slug }] },
+    where: {
+      branchId,
+      OR: [{ name: payload.name }, { slug }],
+    },
   });
   if (exists) {
     throw new ApiError(httpStatus.BAD_REQUEST, "Designation already exists");
@@ -22,12 +40,13 @@ const createDesignation = async (payload: any) => {
       slug,
       description: payload.description,
       isActive: payload.isActive ?? true,
+      branchId,
     },
   });
   return result;
 };
 
-const getAllDesignations = async (query: any) => {
+const getAllDesignations = async (query: any, actor?: ActorContext) => {
   const { page, limit, searchTerm, sortBy, sortOrder, ...filter } = query;
 
   const andCondition: Prisma.DesignationWhereInput[] = [];
@@ -52,6 +71,12 @@ const getAllDesignations = async (query: any) => {
     });
   }
 
+  // Tenant scoping — non-platform users see only their branch's
+  // designations.
+  if (actor && !isPlatformAdmin(actor.role)) {
+    andCondition.push({ branchId: actor.branchId ?? null });
+  }
+
   const { pageNumber, limitNumber, skip, sortOrderValue, sortByValue } =
     calculatePaginationOrSort(page, limit, sortBy, sortOrder);
 
@@ -73,15 +98,33 @@ const getAllDesignations = async (query: any) => {
   };
 };
 
-const getDesignationById = async (id: string) => {
+const getDesignationById = async (id: string, actor?: ActorContext) => {
   const result = await prisma.designation.findUnique({ where: { id } });
   if (!result) throw new ApiError(httpStatus.NOT_FOUND, "Designation not found");
+  if (actor) assertTenantAccess(actor, result.branchId);
   return result;
 };
 
-const updateDesignation = async (id: string, payload: any) => {
+const updateDesignation = async (
+  id: string,
+  payload: any,
+  actor?: ActorContext,
+) => {
   const existing = await prisma.designation.findUnique({ where: { id } });
   if (!existing) throw new ApiError(httpStatus.NOT_FOUND, "Designation not found");
+  if (actor) {
+    assertTenantAccess(actor, existing.branchId);
+    if (
+      !isPlatformAdmin(actor.role) &&
+      payload.branchId &&
+      payload.branchId !== existing.branchId
+    ) {
+      throw new ApiError(
+        httpStatus.FORBIDDEN,
+        "Cannot move a designation to another branch",
+      );
+    }
+  }
 
   const data: any = {};
   if (payload.name !== undefined) {
@@ -95,16 +138,20 @@ const updateDesignation = async (id: string, payload: any) => {
   return result;
 };
 
-const deleteDesignation = async (id: string) => {
+const deleteDesignation = async (id: string, actor?: ActorContext) => {
   const existing = await prisma.designation.findUnique({ where: { id } });
   if (!existing) throw new ApiError(httpStatus.NOT_FOUND, "Designation not found");
+  if (actor) assertTenantAccess(actor, existing.branchId);
+
   await prisma.designation.delete({ where: { id } });
   return { message: "Designation deleted successfully" };
 };
 
-const updateDesignationStatus = async (id: string) => {
+const updateDesignationStatus = async (id: string, actor?: ActorContext) => {
   const existing = await prisma.designation.findUnique({ where: { id } });
   if (!existing) throw new ApiError(httpStatus.NOT_FOUND, "Designation not found");
+  if (actor) assertTenantAccess(actor, existing.branchId);
+
   const result = await prisma.designation.update({
     where: { id },
     data: { isActive: !existing.isActive },

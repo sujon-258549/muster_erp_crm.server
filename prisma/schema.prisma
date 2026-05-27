@@ -16,8 +16,13 @@ model AllRole {
   role            String?
   description     String?
   isActive        Boolean          @default(true)
+  // Null = global role created by Platform Super Admin (e.g. SUPER_ADMIN).
+  // Non-null = role created by a Branch Super Admin for their own tenant;
+  // other tenants cannot see or use it.
+  branchId        String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  branch          MainBranch?      @relation(fields: [branchId], references: [id])
   users           User[]
   rolePermissions RolePermission[]
 
@@ -44,7 +49,7 @@ model Department {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  branch      Branch?  @relation(fields: [branchId], references: [id])
+  branch      MainBranch?  @relation(fields: [branchId], references: [id])
   users       User[]
 
   @@map("departments")
@@ -54,7 +59,10 @@ model Department {
 // ORGANIZATION (Branches & SubBranches)
 // ============================================================================
 
-model Branch {
+// MainBranch = a company (= one customer tenant). Kept `@@map("branches")`
+// so the existing `branches` table and all its data are reused — only the
+// Prisma model name changed, not the database table.
+model MainBranch {
   id             String         @id @default(uuid())
   ownerId        String?
   name           String?
@@ -78,9 +86,9 @@ model Branch {
   isDeleted      Boolean        @default(false)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
-  owner          User?          @relation("OwnedBranches", fields: [ownerId], references: [id])
+  owner          User?          @relation("OwnedMainBranches", fields: [ownerId], references: [id])
   subBranches    SubBranch[]
-  employees      User[]         @relation("BranchEmployees")
+  employees      User[]         @relation("MainBranchEmployees")
   departments    Department[]
   categories     Category[]
   workTypes      WorkType[]
@@ -89,6 +97,8 @@ model Branch {
   comments       Comment[]
   notifications  Notification[]
   subscriptions  Subscription[]
+  allRoles       AllRole[]
+  designations   Designation[]
 
   @@map("branches")
 }
@@ -110,7 +120,7 @@ model SubBranch {
   isDeleted   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  branch      Branch?  @relation(fields: [branchId], references: [id])
+  branch      MainBranch?  @relation(fields: [branchId], references: [id])
   manager     User?    @relation("ManagedSubBranches", fields: [managerId], references: [id])
   employees   User[]   @relation("SubBranchEmployees")
 
@@ -122,10 +132,14 @@ model Designation {
   name        String
   slug        String?  @unique
   description String?
+  // Null = global designation created by Platform Super Admin. Non-null
+  // = designation created by a Branch Super Admin for their own tenant.
+  branchId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   isActive    Boolean  @default(true)
-  
+
+  branch      MainBranch? @relation(fields: [branchId], references: [id])
   users       User[]
 }
 
@@ -182,9 +196,9 @@ model User {
   profile            Profile?
   workInfo           WorkInfo?
   department         Department?        @relation(fields: [departmentId], references: [id])
-  branch             Branch?            @relation("BranchEmployees", fields: [branchId], references: [id])
+  branch             MainBranch?            @relation("MainBranchEmployees", fields: [branchId], references: [id])
   subBranch          SubBranch?         @relation("SubBranchEmployees", fields: [subBranchId], references: [id])
-  ownedBranches      Branch[]           @relation("OwnedBranches")
+  ownedBranches      MainBranch[]           @relation("OwnedMainBranches")
   managedSubBranches SubBranch[]        @relation("ManagedSubBranches")
   subscriptionEarns  SubscriptionEarn[]
   comments           Comment[]
@@ -360,29 +374,22 @@ model SubscriptionPlan {
 }
 
 // Subscription = a specific company's (Branch's) active billing window
-// against a Plan. Each row represents one sale/renewal — start, end,
-// snapshot of price/cycle so historical rows survive plan edits.
+// against a Plan. Pure instance — all plan details (name, price, cycle,
+// currency) come from the related SubscriptionPlan, never duplicated here.
 model Subscription {
-  id           String   @id @default(uuid())
-  branchId     String?
-  planId       String?
-  // Snapshots — frozen at purchase time so changing the Plan template
-  // doesn't rewrite past sales.
-  planName     String?
-  price        String?
-  currency     String?  @default("BDT")
-  billingCycle String?
-  startDate    DateTime?
-  // Null when billingCycle = "lifetime".
-  endDate      DateTime?
-  notes        String?
-  isActive     Boolean  @default(true)
-  status       Boolean  @default(true)
-  isDeleted    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String    @id @default(uuid())
+  branchId  String?
+  planId    String?
+  startDate DateTime?
+  // Null when the linked plan is lifetime.
+  endDate   DateTime?
+  notes     String?
+  isActive  Boolean   @default(true)
+  isDeleted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  branch            Branch?            @relation(fields: [branchId], references: [id])
+  branch            MainBranch?        @relation(fields: [branchId], references: [id])
   plan              SubscriptionPlan?  @relation(fields: [planId], references: [id])
   payments          Payment[]
   subscriptionEarns SubscriptionEarn[]
@@ -414,7 +421,7 @@ model Category {
   status        Boolean       @default(true)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-  branch        Branch?       @relation(fields: [branchId], references: [id])
+  branch        MainBranch?       @relation(fields: [branchId], references: [id])
   subCategories SubCategory[]
 
   @@map("categories")
@@ -444,7 +451,7 @@ model WorkType {
   isActive    Boolean    @default(true)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-  branch      Branch?    @relation(fields: [branchId], references: [id])
+  branch      MainBranch?    @relation(fields: [branchId], references: [id])
   workInfos   WorkInfo[]
 
   @@map("work_types")
@@ -468,7 +475,7 @@ model Blog {
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  branch      Branch?   @relation(fields: [branchId], references: [id])
+  branch      MainBranch?   @relation(fields: [branchId], references: [id])
 
   @@map("blogs")
 }
@@ -482,7 +489,7 @@ model Folder {
   status    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  branch    Branch?  @relation(fields: [branchId], references: [id])
+  branch    MainBranch?  @relation(fields: [branchId], references: [id])
   parent    Folder?  @relation("FolderToFolder", fields: [parentId], references: [id])
   children  Folder[] @relation("FolderToFolder")
   images    Image[]
@@ -512,7 +519,7 @@ model Comment {
   userId    String?
   comment   String?
   isDeleted Boolean  @default(false)
-  branch    Branch?  @relation(fields: [branchId], references: [id])
+  branch    MainBranch?  @relation(fields: [branchId], references: [id])
   user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -528,7 +535,7 @@ model Notification {
   message   String?
   isRead    Boolean  @default(false)
   isDeleted Boolean  @default(false)
-  branch    Branch?  @relation(fields: [branchId], references: [id])
+  branch    MainBranch?  @relation(fields: [branchId], references: [id])
   user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

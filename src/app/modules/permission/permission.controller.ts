@@ -4,9 +4,13 @@ import sendResponse from "../../utils/response.ts";
 import { PermissionServices } from "./permission.service.ts";
 import { pick } from "../../../shared/pick.ts";
 import { permissionFilterableFields } from "./permission.constant.ts";
+import { actorFromReq } from "../../utils/tenant.ts";
 
 const createPermission = catchAsync(async (req, res) => {
-  const result = await PermissionServices.createPermission(req.body);
+  const result = await PermissionServices.createPermission(
+    req.body,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
@@ -17,7 +21,10 @@ const createPermission = catchAsync(async (req, res) => {
 
 const getAllPermission = catchAsync(async (req, res) => {
   const query = pick(req.query, permissionFilterableFields);
-  const result = await PermissionServices.getAllPermission(query);
+  const result = await PermissionServices.getAllPermission(
+    query,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -29,7 +36,10 @@ const getAllPermission = catchAsync(async (req, res) => {
 
 const getPermissionById = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await PermissionServices.getPermissionById(id as string);
+  const result = await PermissionServices.getPermissionById(
+    id as string,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -40,7 +50,10 @@ const getPermissionById = catchAsync(async (req, res) => {
 
 const getPermissionsByRole = catchAsync(async (req, res) => {
   const { roleId } = req.params;
-  const result = await PermissionServices.getPermissionsByRole(roleId as string);
+  const result = await PermissionServices.getPermissionsByRole(
+    roleId as string,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -54,6 +67,7 @@ const updatePermission = catchAsync(async (req, res) => {
   const result = await PermissionServices.updatePermission(
     id as string,
     req.body,
+    actorFromReq(req),
   );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -65,7 +79,10 @@ const updatePermission = catchAsync(async (req, res) => {
 
 const deletePermission = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await PermissionServices.deletePermission(id as string);
+  const result = await PermissionServices.deletePermission(
+    id as string,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -82,6 +99,7 @@ const replacePermissionsForRole = catchAsync(async (req, res) => {
   const result = await PermissionServices.replacePermissionsForRole(
     roleId as string,
     permissions,
+    actorFromReq(req),
   );
   return sendResponse(res, {
     statusCode: httpStatus.OK,

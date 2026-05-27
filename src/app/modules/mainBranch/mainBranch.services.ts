@@ -2,43 +2,52 @@ import type { Prisma } from "../../../generated/prisma/client.js";
 import ApiError from "../../middleware/apiError.ts";
 import httpStatus from "http-status";
 import { calculatePaginationOrSort } from "../../../shared/calculatePaginationOrSort.tsx";
-import { branchSearchableFields } from "./branch.const.ts";
+import { mainBranchSearchableFields } from "./mainBranch.const.ts";
 import prisma from "../../utils/prismaClient.ts";
 import slugCreate from "../../utils/slugCreate.ts";
 import type { ActorContext } from "../../utils/tenant.ts";
 import { isPlatformAdmin } from "../../utils/tenant.ts";
 
-const createBranchIntoDB = async (
+const createMainBranchIntoDB = async (
   ownerId: string,
   payload: any,
   actor: ActorContext,
 ) => {
   const owner = await prisma.user.findUnique({
     where: { id: ownerId },
-    include: { subscription: true },
   });
 
   if (!owner) {
     throw new ApiError(httpStatus.NOT_FOUND, "Owner user not found");
   }
 
-  // Subscription gate applies to tenant users only — platform admins own
-  // the system and can spin up branches without a paid plan.
-  if (!isPlatformAdmin(actor.role) && !owner.subscriptionId) {
-    throw new ApiError(
-      httpStatus.FORBIDDEN,
-      "Active subscription required to create a branch",
-    );
+  // Subscription gate is now Branch-scoped (Subscription has branchId, not
+  // userId) — for create-branch we just confirm a non-platform user owns a
+  // branch with at least one active subscription. Platform admins bypass.
+  if (!isPlatformAdmin(actor.role)) {
+    const hasActiveSub = await prisma.subscription.findFirst({
+      where: {
+        branch: { ownerId },
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    if (!hasActiveSub) {
+      throw new ApiError(
+        httpStatus.FORBIDDEN,
+        "Active subscription required to create a branch",
+      );
+    }
   }
 
   const slugBase = slugCreate(payload.name);
   let slug = slugBase;
   let counter = 1;
-  while (await prisma.branch.findUnique({ where: { slug } })) {
+  while (await prisma.mainBranch.findUnique({ where: { slug } })) {
     slug = `${slugBase}-${counter++}`;
   }
 
-  const result = await prisma.branch.create({
+  const result = await prisma.mainBranch.create({
     data: {
       ...payload,
       slug,
@@ -48,14 +57,14 @@ const createBranchIntoDB = async (
   return result;
 };
 
-const getAllBranches = async (query: any, actor: ActorContext) => {
+const getAllMainBranches = async (query: any, actor: ActorContext) => {
   const { page, limit, searchTerm, sortBy, sortOrder, ...filter } = query;
 
-  const andCondition: Prisma.BranchWhereInput[] = [];
+  const andCondition: Prisma.MainBranchWhereInput[] = [];
 
   if (searchTerm) {
     andCondition.push({
-      OR: branchSearchableFields.map((text: string) => ({
+      OR: mainBranchSearchableFields.map((text: string) => ({
         [text]: {
           contains: searchTerm,
           mode: "insensitive",
@@ -77,7 +86,7 @@ const getAllBranches = async (query: any, actor: ActorContext) => {
   const { pageNumber, limitNumber, skip, sortOrderValue, sortByValue } =
     calculatePaginationOrSort(page, limit, sortBy, sortOrder);
 
-  const result = await prisma.branch.findMany({
+  const result = await prisma.mainBranch.findMany({
     where: {
       AND: andCondition.length > 0 ? andCondition : undefined,
       ...filter,
@@ -106,7 +115,7 @@ const getAllBranches = async (query: any, actor: ActorContext) => {
     },
   });
 
-  const total = await prisma.branch.count({
+  const total = await prisma.mainBranch.count({
     where: {
       AND: andCondition.length > 0 ? andCondition : undefined,
       ...filter,
@@ -124,8 +133,8 @@ const getAllBranches = async (query: any, actor: ActorContext) => {
   };
 };
 
-const getBranchById = async (id: string, actor: ActorContext) => {
-  const result = await prisma.branch.findUnique({
+const getMainBranchById = async (id: string, actor: ActorContext) => {
+  const result = await prisma.mainBranch.findUnique({
     where: { id },
     include: {
       owner: {
@@ -146,7 +155,7 @@ const getBranchById = async (id: string, actor: ActorContext) => {
   });
 
   if (!result || result.isDeleted) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Branch not found");
+    throw new ApiError(httpStatus.NOT_FOUND, "Main branch not found");
   }
 
   // Non-admins must own or be an employee
@@ -161,10 +170,10 @@ const getBranchById = async (id: string, actor: ActorContext) => {
   return result;
 };
 
-const assertBranchOwner = async (id: string, actor: ActorContext) => {
-  const existing = await prisma.branch.findUnique({ where: { id } });
+const assertMainBranchOwner = async (id: string, actor: ActorContext) => {
+  const existing = await prisma.mainBranch.findUnique({ where: { id } });
   if (!existing || existing.isDeleted) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Branch not found");
+    throw new ApiError(httpStatus.NOT_FOUND, "Main branch not found");
   }
   if (!isPlatformAdmin(actor.role) && existing.ownerId !== actor.userId) {
     throw new ApiError(httpStatus.FORBIDDEN, "Only branch owner can perform this action");
@@ -172,17 +181,17 @@ const assertBranchOwner = async (id: string, actor: ActorContext) => {
   return existing;
 };
 
-const updateBranch = async (id: string, payload: any, actor: ActorContext) => {
-  const existing = await assertBranchOwner(id, actor);
+const updateMainBranch = async (id: string, payload: any, actor: ActorContext) => {
+  const existing = await assertMainBranchOwner(id, actor);
 
-  const data: Prisma.BranchUpdateInput = { ...payload };
+  const data: Prisma.MainBranchUpdateInput = { ...payload };
 
   if (payload.name && payload.name !== existing.name) {
     const slugBase = slugCreate(payload.name);
     let slug = slugBase;
     let counter = 1;
     while (
-      await prisma.branch.findFirst({
+      await prisma.mainBranch.findFirst({
         where: { slug, NOT: { id } },
       })
     ) {
@@ -191,38 +200,38 @@ const updateBranch = async (id: string, payload: any, actor: ActorContext) => {
     data.slug = slug;
   }
 
-  const result = await prisma.branch.update({
+  const result = await prisma.mainBranch.update({
     where: { id },
     data,
   });
   return result;
 };
 
-const deleteBranch = async (id: string, actor: ActorContext) => {
-  await assertBranchOwner(id, actor);
+const deleteMainBranch = async (id: string, actor: ActorContext) => {
+  await assertMainBranchOwner(id, actor);
 
-  const result = await prisma.branch.update({
+  const result = await prisma.mainBranch.update({
     where: { id },
     data: { isDeleted: true, isActive: false },
   });
   return result;
 };
 
-const updateBranchStatus = async (id: string, actor: ActorContext) => {
-  const existing = await assertBranchOwner(id, actor);
+const updateMainBranchStatus = async (id: string, actor: ActorContext) => {
+  const existing = await assertMainBranchOwner(id, actor);
 
-  const result = await prisma.branch.update({
+  const result = await prisma.mainBranch.update({
     where: { id },
     data: { isActive: !existing.isActive },
   });
   return result;
 };
 
-export const BranchServices = {
-  createBranchIntoDB,
-  getAllBranches,
-  getBranchById,
-  updateBranch,
-  deleteBranch,
-  updateBranchStatus,
+export const MainBranchServices = {
+  createMainBranchIntoDB,
+  getAllMainBranches,
+  getMainBranchById,
+  updateMainBranch,
+  deleteMainBranch,
+  updateMainBranchStatus,
 };

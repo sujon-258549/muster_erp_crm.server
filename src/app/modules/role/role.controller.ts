@@ -4,9 +4,10 @@ import sendResponse from "../../utils/response.ts";
 import { RoleServices } from "./role.service.ts";
 import { pick } from "../../../shared/pick.ts";
 import { roleFilterableFields } from "./role.constant.ts";
+import { actorFromReq } from "../../utils/tenant.ts";
 
 const createRole = catchAsync(async (req, res) => {
-  const result = await RoleServices.createRole(req.body);
+  const result = await RoleServices.createRole(req.body, actorFromReq(req));
   return sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
@@ -17,7 +18,7 @@ const createRole = catchAsync(async (req, res) => {
 
 const getAllRole = catchAsync(async (req, res) => {
   const query = pick(req.query, roleFilterableFields);
-  const result = await RoleServices.getAllRole(query);
+  const result = await RoleServices.getAllRole(query, actorFromReq(req));
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -29,7 +30,10 @@ const getAllRole = catchAsync(async (req, res) => {
 
 const getRoleById = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await RoleServices.getRoleById(id as string);
+  const result = await RoleServices.getRoleById(
+    id as string,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -40,7 +44,11 @@ const getRoleById = catchAsync(async (req, res) => {
 
 const updateRole = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await RoleServices.updateRole(id as string, req.body);
+  const result = await RoleServices.updateRole(
+    id as string,
+    req.body,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -51,7 +59,10 @@ const updateRole = catchAsync(async (req, res) => {
 
 const deleteRole = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await RoleServices.deleteRole(id as string);
+  const result = await RoleServices.deleteRole(
+    id as string,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -62,7 +73,10 @@ const deleteRole = catchAsync(async (req, res) => {
 
 const updateRoleStatus = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await RoleServices.updateRoleStatus(id as string);
+  const result = await RoleServices.updateRoleStatus(
+    id as string,
+    actorFromReq(req),
+  );
   return sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
