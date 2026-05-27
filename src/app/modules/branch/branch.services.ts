@@ -8,7 +8,11 @@ import slugCreate from "../../utils/slugCreate.ts";
 import type { ActorContext } from "../../utils/tenant.ts";
 import { isPlatformAdmin } from "../../utils/tenant.ts";
 
-const createBranchIntoDB = async (ownerId: string, payload: any) => {
+const createBranchIntoDB = async (
+  ownerId: string,
+  payload: any,
+  actor: ActorContext,
+) => {
   const owner = await prisma.user.findUnique({
     where: { id: ownerId },
     include: { subscription: true },
@@ -18,7 +22,9 @@ const createBranchIntoDB = async (ownerId: string, payload: any) => {
     throw new ApiError(httpStatus.NOT_FOUND, "Owner user not found");
   }
 
-  if (!owner.subscriptionId) {
+  // Subscription gate applies to tenant users only — platform admins own
+  // the system and can spin up branches without a paid plan.
+  if (!isPlatformAdmin(actor.role) && !owner.subscriptionId) {
     throw new ApiError(
       httpStatus.FORBIDDEN,
       "Active subscription required to create a branch",

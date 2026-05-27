@@ -10,7 +10,11 @@ import { actorFromReq } from "../../utils/tenant.ts";
 const createBranch = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const ownerId = req.user?.id as string;
-    const result = await BranchServices.createBranchIntoDB(ownerId, req.body);
+    const result = await BranchServices.createBranchIntoDB(
+      ownerId,
+      req.body,
+      actorFromReq(req),
+    );
     sendResponse(res, {
       success: true,
       statusCode: status.CREATED,
