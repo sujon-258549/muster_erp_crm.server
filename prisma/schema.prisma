@@ -88,6 +88,7 @@ model Branch {
   folders        Folder[]
   comments       Comment[]
   notifications  Notification[]
+  subscriptions  Subscription[]
 
   @@map("branches")
 }
@@ -168,7 +169,6 @@ model User {
   loginTryTime  DateTime? @default(now())
 
   // ---- FKs ----
-  subscriptionId String?
   departmentId   String?
   branchId       String?
   subBranchId    String?
@@ -181,7 +181,6 @@ model User {
   address            Address?
   profile            Profile?
   workInfo           WorkInfo?
-  subscription       Subscription?      @relation(fields: [subscriptionId], references: [id])
   department         Department?        @relation(fields: [departmentId], references: [id])
   branch             Branch?            @relation("BranchEmployees", fields: [branchId], references: [id])
   subBranch          SubBranch?         @relation("SubBranchEmployees", fields: [subBranchId], references: [id])
@@ -332,23 +331,59 @@ model Payment {
   @@map("payments")
 }
 
+// SubscriptionPlan = reusable template the Platform Super Admin defines
+// once (e.g. "Pro Monthly", "Lifetime Enterprise"). Companies pick from
+// these when buying a subscription.
+model SubscriptionPlan {
+  id            String   @id @default(uuid())
+  name          String?
+  slug          String?  @unique
+  description   String?
+  price         String?
+  currency      String?  @default("BDT")
+  // Stable cycle identifier from lib/billing-cycles ("3-day", "2-week",
+  // "6-month", "1-year", "lifetime", ...).
+  billingCycle  String?
+  // Number of months covered. Null => lifetime.
+  durationMonths Int?
+  // Marketing list of features included in the plan.
+  features      String[] @default([])
+  isRecomended  Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  isDeleted     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+// Subscription = a specific company's (Branch's) active billing window
+// against a Plan. Each row represents one sale/renewal — start, end,
+// snapshot of price/cycle so historical rows survive plan edits.
 model Subscription {
-  id                String             @id @default(uuid())
-  name              String?
-  price             String?
-  discount          String?
-  duration          String?
-  slug              String?            @unique
-  activeDays        Int?
-  isRecomended      Boolean            @default(false)
-  featured          String[]           @default([])
-  isActive          Boolean            @default(true)
-  status            Boolean            @default(true)
-  description       String?
-  isDeleted         Boolean            @default(false)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  users             User[]
+  id           String   @id @default(uuid())
+  branchId     String?
+  planId       String?
+  // Snapshots — frozen at purchase time so changing the Plan template
+  // doesn't rewrite past sales.
+  planName     String?
+  price        String?
+  currency     String?  @default("BDT")
+  billingCycle String?
+  startDate    DateTime?
+  // Null when billingCycle = "lifetime".
+  endDate      DateTime?
+  notes        String?
+  isActive     Boolean  @default(true)
+  status       Boolean  @default(true)
+  isDeleted    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  branch            Branch?            @relation(fields: [branchId], references: [id])
+  plan              SubscriptionPlan?  @relation(fields: [planId], references: [id])
   payments          Payment[]
   subscriptionEarns SubscriptionEarn[]
 
