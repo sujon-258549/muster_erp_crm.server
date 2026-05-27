@@ -156,6 +156,10 @@ model User {
   isVerified         Boolean   @default(false)
   passwordChanged    Boolean   @default(false)
   passwordChangeTime DateTime?
+  // Set to true when this user's role permissions change; the next
+  // /users/my-data fetch reads + clears it, forcing a frontend reload
+  // so the sidebar/route guards re-evaluate against the new grants.
+  forceReload        Boolean   @default(false)
 
   // ---- Login meta ----
   lastLogin     DateTime? @default(now())

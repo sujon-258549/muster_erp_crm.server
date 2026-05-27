@@ -5,7 +5,7 @@ import { JwtHelpers } from "../../utils/jwtHelpers.ts";
 import config from "../../config/index.ts";
 import argon2 from "argon2";
 import { sendEmail, otpEmailTemplate } from "../../utils/sendEmail.ts";
-import { derivePermissionKeys } from "../../utils/userPermissions.ts";
+import { derivePermissionRows } from "../../utils/userPermissions.ts";
 
 const loginUser = async (payload: any) => {
   const user = await prisma.user.findUnique({
@@ -67,6 +67,12 @@ const loginUser = async (payload: any) => {
     }
   }
 
+  if (!user.password) {
+    throw new ApiError(
+      status.UNAUTHORIZED,
+      "🔍❓ Account has no password set — use Forgot Password",
+    );
+  }
   const isPasswordCorrect = await argon2.verify(
     user.password,
     payload.password,
@@ -143,7 +149,7 @@ const loginUser = async (payload: any) => {
       isVerified: user.isVerified,
       isBlocked: user.isBlocked,
       isDeleted: user.isDeleted,
-      permissions: derivePermissionKeys(user.role),
+      permissions: derivePermissionRows(user.role),
     },
     isLogin: true,
   };
@@ -237,7 +243,7 @@ const refreshToken = async (token: string) => {
       isVerified: user.isVerified,
       isBlocked: user.isBlocked,
       isDeleted: user.isDeleted,
-      permissions: derivePermissionKeys(user.role),
+      permissions: derivePermissionRows(user.role),
     },
   };
 };
@@ -253,6 +259,9 @@ const forgotPassword = async (payload: { email: string }) => {
 
   const generateOtp = Math.floor(100000 + Math.random() * 900000);
 
+  if (!user.email) {
+    throw new ApiError(status.BAD_REQUEST, "🔍❓ Account has no email on file");
+  }
   const emailData: { name?: string; otp: number } = {
     otp: generateOtp,
   };

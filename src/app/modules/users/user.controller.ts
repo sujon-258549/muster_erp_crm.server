@@ -62,7 +62,9 @@ const updateUser = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getMyData = catchAsync(async (req: Request, res: Response) => {
-  const result = await UserServices.getMyData(req.user?.id as string);
+  const result = await UserServices.getMyDataAndClearReload(
+    req.user?.id as string,
+  );
   sendResponse(res, {
     success: true,
     statusCode: status.OK,

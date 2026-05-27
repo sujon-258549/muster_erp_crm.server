@@ -5,12 +5,6 @@ import ApiError from "./apiError.ts";
 import catchAsync from "../shared/catchAsync.ts";
 import { USER_ROLE } from "../modules/users/user.constant.ts";
 
-// Action verbs stored alongside each module key on a RolePermission row.
-// Mirrors `PERMISSION_ACTIONS` on the frontend.
-export type PermissionAction = "create" | "read" | "update" | "delete";
-
-// `requirePermission(moduleKey, action?)`
-//
 // Drop-in middleware that runs AFTER `auth()` and checks whether the
 // signed-in user's role has the given module + action granted in the
 // RolePermission table. Super-admins bypass every check.
@@ -23,10 +17,10 @@ export type PermissionAction = "create" | "read" | "update" | "delete";
 //     UserController.getAllUsers,
 //   );
 //
-// Module key conventions match the frontend `PERMISSION_ITEMS` keys —
-// sub-modules (e.g. "employees", "departments") rather than parents
-// ("users"), so the permission catalog stays in sync everywhere.
-const requirePermission = (moduleKey: string, action?: PermissionAction) => {
+// `action` accepts any string so custom verbs (e.g. "permission",
+// "change_password", "view_own") work without a type change. Module keys
+// match the frontend `PERMISSION_CATALOG`.
+const requirePermission = (moduleKey: string, action?: string) => {
   return catchAsync(
     async (req: Request, _res: Response, next: NextFunction) => {
       const userId = req.user?.id;

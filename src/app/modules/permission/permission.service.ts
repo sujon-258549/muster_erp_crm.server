@@ -4,6 +4,7 @@ import prisma from "../../utils/prismaClient.ts";
 import ApiError from "../../middleware/apiError.ts";
 import { permissionSearchableFields } from "./permission.constant.ts";
 import { calculatePaginationOrSort } from "../../../shared/calculatePaginationOrSort.tsx";
+import { getIO } from "../../utils/socket.ts";
 
 const createPermission = async (payload: any) => {
   const roleExists = await prisma.allRole.findUnique({
@@ -50,9 +51,11 @@ const getAllPermission = async (query: any) => {
     });
   }
 
-  const whereCondition: Prisma.RolePermissionWhereInput = {
-    AND: andCondition.length > 0 ? andCondition : undefined,
-  };
+  // Only include the AND key when we actually have conditions; with
+  // `exactOptionalPropertyTypes: true` Prisma's input type rejects explicit
+  // `undefined`.
+  const whereCondition: Prisma.RolePermissionWhereInput =
+    andCondition.length > 0 ? { AND: andCondition } : {};
 
   const result = await prisma.rolePermission.findMany({
     where: whereCondition,
@@ -149,7 +152,32 @@ const replacePermissionsForRole = async (
         });
       }
     }
+
+    // Flag every user under this role so their next /my-data fetch
+    // returns forceReload=true and the frontend can refresh. Also kept as
+    // a backstop for users who are offline when the socket event fires.
+    await tx.user.updateMany({
+      where: { roleId },
+      data: { forceReload: true },
+    });
   });
+
+  // Real-time push to every connected client under this role. Each user
+  // joins a room keyed by their userId on socket connect, so we look up
+  // affected users and emit to each of their rooms.
+  try {
+    const affected = await prisma.user.findMany({
+      where: { roleId },
+      select: { id: true },
+    });
+    const io = getIO();
+    for (const u of affected) {
+      io.to(u.id).emit("force-reload", { reason: "permissions-changed" });
+    }
+  } catch {
+    // Socket layer not initialised (e.g. during tests) — fall back to the
+    // forceReload DB flag which the next /my-data poll will pick up.
+  }
 
   return await prisma.rolePermission.findMany({
     where: { roleId },

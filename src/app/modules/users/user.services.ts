@@ -8,7 +8,7 @@ import { JwtHelpers } from "../../utils/jwtHelpers.ts";
 import config from "../../config/index.ts";
 import { userSearchableFields } from "./user.constant.ts";
 import { calculatePaginationOrSort } from "../../../shared/calculatePaginationOrSort.tsx";
-import { derivePermissionKeys } from "../../utils/userPermissions.ts";
+import { derivePermissionRows } from "../../utils/userPermissions.ts";
 
 // Role select shape reused across every user fetch — includes the joined
 // RolePermission rows so a flat `permissions` array can be derived per user.
@@ -135,6 +135,12 @@ const createUserIntoDB = async (payload: any) => {
             name: true,
           },
         },
+        designation: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         profile: {
           include: {
             profilePhoto: {
@@ -244,6 +250,12 @@ const getAllUsers = async (query: any) => {
           name: true,
         },
       },
+      designation: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       profile: {
         include: {
           profilePhoto: {
@@ -283,7 +295,7 @@ const getAllUsers = async (query: any) => {
   return {
     data: users.map(({ password, ...rest }) => ({
       ...rest,
-      permissions: derivePermissionKeys(rest.role),
+      permissions: derivePermissionRows(rest.role),
     })),
     meta: {
       page: pageNumber,
@@ -302,6 +314,12 @@ const getUserById = async (id: string) => {
         select: ROLE_SELECT_WITH_PERMISSIONS,
       },
       department: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      designation: {
         select: {
           id: true,
           name: true,
@@ -347,7 +365,7 @@ const getUserById = async (id: string) => {
   return {
     ...rest,
     password: undefined,
-    permissions: derivePermissionKeys(rest.role),
+    permissions: derivePermissionRows(rest.role),
   };
 };
 
@@ -380,7 +398,9 @@ const updateUser = async (
     "isBlocked",
     "isDeleted",
     "isVerified",
+    "roleId",
     "departmentId",
+    "designationId",
     "subscriptionId",
   ] as const;
   for (const k of userScalarKeys) {
@@ -480,6 +500,12 @@ const updateUser = async (
           name: true,
         },
       },
+      designation: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       profile: {
         include: {
           profilePhoto: {
@@ -533,6 +559,12 @@ const getMyData = async (id: string) => {
           name: true,
         },
       },
+      designation: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       profile: {
         include: {
           profilePhoto: {
@@ -572,8 +604,23 @@ const getMyData = async (id: string) => {
   return {
     ...rest,
     password: undefined,
-    permissions: derivePermissionKeys(rest.role),
+    permissions: derivePermissionRows(rest.role),
   };
+};
+
+// Same as getMyData but ALSO clears the user's forceReload flag if it was
+// set. Returns the previous flag value so the client knows it must reload.
+// Wired to the /users/my-data endpoint so any periodic poll naturally
+// consumes the flag.
+const getMyDataAndClearReload = async (id: string) => {
+  const fresh = await getMyData(id);
+  if ((fresh as { forceReload?: boolean })?.forceReload) {
+    await prisma.user.update({
+      where: { id },
+      data: { forceReload: false },
+    });
+  }
+  return fresh;
 };
 
 // change password
@@ -614,6 +661,12 @@ const changePassword = async (
     );
   }
 
+  if (!user.password) {
+    throw new ApiError(
+      status.BAD_REQUEST,
+      "🔍❓ Account has no password set — use Forgot Password to create one",
+    );
+  }
   const isPasswordCorrect = await argon2.verify(
     user.password,
     payload.oldPassword,
@@ -792,6 +845,7 @@ export const UserServices = {
   getAllUsers,
   updateUser,
   getMyData,
+  getMyDataAndClearReload,
   changePassword,
   varifyOtp,
   deleteUser,
